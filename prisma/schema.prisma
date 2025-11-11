@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Note {
+  id           String    @id @default(cuid())
+  ownerId      String
+  projectId    String?
+  parentId     String?
+  title        String?
+  bodyMarkdown String?   @db.Text
+  bodyHtml     String?   @db.Text
+  isTask       Boolean   @default(false)
+  completedAt  DateTime?
+  priority     Int?
+  dueAt        DateTime?
+  remindAt     DateTime?
+  archivedAt   DateTime?
+  deletedAt    DateTime?
+  metadata     Json?
+  sortIndex    Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  owner       User         @relation(fields: [ownerId], references: [id])
+  project     Project?     @relation(fields: [projectId], references: [id])
+  parent      Note?        @relation("NoteChildren", fields: [parentId], references: [id])
+  children    Note[]       @relation("NoteChildren")
+  tags        NoteTag[]
+  attachments Attachment[]
+
+  @@index([ownerId, archivedAt])
+  @@index([ownerId, dueAt])
+  @@index([projectId])
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  ownerId     String
+  name        String
+  description String?
+  emoji       String?
+  sortIndex   Int       @default(0)
+  archivedAt  DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  owner User   @relation(fields: [ownerId], references: [id])
+  notes Note[]
+
+  @@unique([ownerId, name])
+}
+
+model Tag {
+  id          String    @id @default(cuid())
+  scope       TagScope  @default(USER)
+  ownerId     String?
+  name        String
+  description String
+  color       String
+  isPreset    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  owner User?     @relation(fields: [ownerId], references: [id])
+  notes NoteTag[]
+
+  @@unique([scope, name])
+  @@unique([scope, ownerId, name])
+  @@unique([scope, ownerId, color])
+}
+
+enum TagScope {
+  SYSTEM
+  USER
+}
+
+model NoteTag {
+  id        String   @id @default(cuid())
+  noteId    String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  note Note @relation(fields: [noteId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@unique([noteId, tagId])
+  @@index([tagId])
+}
+
+model Attachment {
+  id          String         @id @default(cuid())
+  ownerId     String
+  noteId      String
+  position    Int
+  url         String
+  storagePath String?
+  name        String?
+  size        Int?
+  mimeType    String?
+  kind        AttachmentKind
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id])
+  note  Note @relation(fields: [noteId], references: [id])
+
+  @@unique([noteId, position])
+  @@index([ownerId])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  displayName String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  notes       Note[]
+  projects    Project[]
+  tags        Tag[]
+  attachments Attachment[]
+}
+
+enum AttachmentKind {
+  IMAGE
+  FILE
+  LINK
+}
