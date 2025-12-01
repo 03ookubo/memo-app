@@ -16,13 +16,9 @@ model Note {
   title        String?
   bodyMarkdown String?   @db.Text
   bodyHtml     String?   @db.Text
-  isTask       Boolean   @default(false)
-  completedAt  DateTime?
-  priority     Int?
-  dueAt        DateTime?
-  remindAt     DateTime?
+  task         Task?     @relation("NoteToTask") // NoteとTaskは1対1、relation名を明示
   archivedAt   DateTime?
-  deletedAt    DateTime?
+  deletedAt    DateTime? // Noteはソフト削除
   metadata     Json?
   sortIndex    Int       @default(0)
   createdAt    DateTime  @default(now())
@@ -30,13 +26,14 @@ model Note {
 
   owner       User         @relation(fields: [ownerId], references: [id])
   project     Project?     @relation(fields: [projectId], references: [id])
-  parent      Note?        @relation("NoteChildren", fields: [parentId], references: [id])
+  // 親ノート削除時に子ノートのparentIdをNULLにする (SetNull方針)
+  // アプリケーション層で削除確認ロジックを実装する
+  parent      Note?        @relation("NoteChildren", fields: [parentId], references: [id], onDelete: SetNull)
   children    Note[]       @relation("NoteChildren")
   tags        NoteTag[]
   attachments Attachment[]
 
   @@index([ownerId, archivedAt])
-  @@index([ownerId, dueAt])
   @@index([projectId])
 }
 
@@ -58,33 +55,39 @@ model Project {
   @@unique([ownerId, name])
 }
 
+// Tagモデル（独立したエンティティとして、システムタグとユーザータグを表現）
+// SYSTEMタグのname/colorの一意性はアプリケーション層で保証する
 model Tag {
   id          String    @id @default(cuid())
-  scope       TagScope  @default(USER)
-  ownerId     String?
+  scope       TagScope  @default(USER) // SYSTEM または USER
+  ownerId     String?   // USERタグの場合にUser.idを参照。SYSTEMタグの場合はnull
   name        String
-  description String
+  description String?
   color       String
   isPreset    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  // deletedAtは追加しない（タグは独立して管理され、ソフト削除の運用は別途検討）
 
-  owner User?     @relation(fields: [ownerId], references: [id])
+  // ownerIdが設定されている場合のみ、Userモデルとのリレーションを確立
+  owner User? @relation(fields: [ownerId], references: [id])
   notes NoteTag[]
 
-  @@unique([scope, name])
-  @@unique([scope, ownerId, name])
-  @@unique([scope, ownerId, color])
+  // タグの名前と色の一意性に関する制約
+  // ownerIdがnullの場合 (SYSTEMタグ) は、scopeとname/colorで一意となるよう
+  // アプリケーション層でのバリデーションを徹底する。
+  // ownerIdが非nullの場合 (USERタグ) は、ownerId内でname/colorが一意となる。
+  @@unique([scope, name, ownerId])
+  @@unique([scope, color, ownerId])
 }
 
 enum TagScope {
-  SYSTEM
-  USER
+  SYSTEM // 全ユーザー共通のタグ
+  USER   // ユーザー固有のタグ
 }
 
+// NoteTagモデル（連携エンティティとして複合主キー化）
 model NoteTag {
-  id        String   @id @default(cuid())
   noteId    String
   tagId     String
   createdAt DateTime @default(now())
@@ -92,7 +95,7 @@ model NoteTag {
   note Note @relation(fields: [noteId], references: [id])
   tag  Tag  @relation(fields: [tagId], references: [id])
 
-  @@unique([noteId, tagId])
+  @@id([noteId, tagId]) // noteIdとtagIdの複合主キー
   @@index([tagId])
 }
 
@@ -110,6 +113,7 @@ model Attachment {
   metadata    Json?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+  // deletedAtは追加しない（関連するNoteの物理削除時、またはアプリでの明示的削除）
 
   owner User @relation(fields: [ownerId], references: [id])
   note  Note @relation(fields: [noteId], references: [id])
@@ -119,16 +123,70 @@ model Attachment {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String?  @unique
-  displayName String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   notes       Note[]
   projects    Project[]
-  tags        Tag[]
+  tags        Tag[] // Userが作成したTagへのリレーション
   attachments Attachment[]
+  credentials Credential[]
+  linkCodes   LinkCode[]
+}
+
+// パスキー（WebAuthn Credential）を保存
+model Credential {
+  id              String    @id @default(cuid())
+  userId          String
+  credentialId    Bytes     @unique // WebAuthn credential ID
+  publicKey       Bytes              // 公開鍵
+  counter         BigInt             // 署名カウンター（リプレイ攻撃防止）
+  deviceType      String?            // "singleDevice" | "multiDevice"
+  backedUp        Boolean   @default(false)
+  transports      String[]           // ["internal", "hybrid", etc.]
+  createdAt       DateTime  @default(now())
+  lastUsedAt      DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// デバイス追加用リンクコード
+model LinkCode {
+  id        String    @id @default(cuid())
+  userId    String
+  code      String    @unique // 6桁コード
+  expiresAt DateTime            // 有効期限（5分）
+  usedAt    DateTime?           // 使用済みフラグ
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([userId])
+}
+
+// Task model: Noteのサブタイプ。タスク固有のフィールドをここに格納する。
+// 1ユーザーあたり100タスク以下であればownerId不要と判断し、削除。
+// deletedAtも削除（Noteの物理削除時、またはアプリでの明示的削除）
+model Task {
+  id          String    @id @default(cuid())
+  noteId      String    @unique
+  dueAt       DateTime?
+  priority    Int?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Note削除時にTaskも連鎖的に削除（アプリケーションの削除確認ロジックで制御）
+  note Note @relation("NoteToTask", fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([dueAt])
+  @@index([completedAt])
 }
 
 enum AttachmentKind {
