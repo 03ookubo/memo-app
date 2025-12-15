@@ -7,28 +7,37 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   generateWebAuthnRegistrationOptions,
-  hasRegisteredUser,
+  hasRegisteredCredential,
   verifyLinkCode,
 } from "@/server/auth";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { name, linkCode } = body as { name?: string; linkCode?: string };
+    // ボディが空の場合も考慮
+    let body: { name?: string; linkCode?: string } = {};
+    try {
+      const text = await request.text();
+      if (text) {
+        body = JSON.parse(text);
+      }
+    } catch {
+      // JSONパースエラーは無視（空ボディの場合）
+    }
+    const { name, linkCode } = body;
 
-    // ユーザーが既に登録されているかチェック
-    const hasUser = await hasRegisteredUser();
+    // パスキーが既に登録されているかチェック（ユーザーではなくCredentialで判定）
+    const hasCredential = await hasRegisteredCredential();
 
     let userId: string;
     let userName: string | undefined = name;
 
-    if (hasUser) {
-      // 既にユーザーが存在する場合、リンクコードが必要
+    if (hasCredential) {
+      // 既にパスキーが存在する場合、リンクコードが必要（デバイス追加）
       if (!linkCode) {
         return NextResponse.json(
           {
             error:
-              "ユーザーは既に登録されています。デバイス追加にはリンクコードが必要です。",
+              "パスキーは既に登録されています。デバイス追加にはリンクコードが必要です。",
           },
           { status: 400 }
         );
@@ -51,13 +60,22 @@ export async function POST(request: Request) {
       });
       userName = existingUser?.name || undefined;
     } else {
-      // 最初のユーザーを作成
-      const newUser = await prisma.user.create({
-        data: {
-          name: name || null,
-        },
-      });
-      userId = newUser.id;
+      // パスキーがない場合：既存ユーザーを探すか、新規作成
+      const existingUser = await prisma.user.findFirst();
+      
+      if (existingUser) {
+        // ユーザーは存在するがパスキーがない → そのユーザーにパスキーを登録
+        userId = existingUser.id;
+        userName = existingUser.name || undefined;
+      } else {
+        // 完全に新規：ユーザーを作成
+        const newUser = await prisma.user.create({
+          data: {
+            name: name || null,
+          },
+        });
+        userId = newUser.id;
+      }
     }
 
     // 登録オプションを生成
@@ -70,7 +88,7 @@ export async function POST(request: Request) {
       options,
       challenge,
       userId,
-      isNewUser: !hasUser,
+      isNewUser: !hasCredential,
     });
   } catch (error) {
     console.error("WebAuthn registration options error:", error);

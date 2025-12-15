@@ -20,6 +20,7 @@ model Note {
   archivedAt   DateTime?
   deletedAt    DateTime? // Noteはソフト削除
   metadata     Json?
+  isEncrypted  Boolean   @default(false)
   sortIndex    Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -32,6 +33,7 @@ model Note {
   children    Note[]       @relation("NoteChildren")
   tags        NoteTag[]
   attachments Attachment[]
+  event       Event?
 
   @@index([ownerId, archivedAt])
   @@index([projectId])
@@ -58,19 +60,19 @@ model Project {
 // Tagモデル（独立したエンティティとして、システムタグとユーザータグを表現）
 // SYSTEMタグのname/colorの一意性はアプリケーション層で保証する
 model Tag {
-  id          String    @id @default(cuid())
-  scope       TagScope  @default(USER) // SYSTEM または USER
-  ownerId     String?   // USERタグの場合にUser.idを参照。SYSTEMタグの場合はnull
+  id          String   @id @default(cuid())
+  scope       TagScope @default(USER) // SYSTEM または USER
+  ownerId     String? // USERタグの場合にUser.idを参照。SYSTEMタグの場合はnull
   name        String
   description String?
   color       String
-  isPreset    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isPreset    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   // deletedAtは追加しない（タグは独立して管理され、ソフト削除の運用は別途検討）
 
   // ownerIdが設定されている場合のみ、Userモデルとのリレーションを確立
-  owner User? @relation(fields: [ownerId], references: [id])
+  owner User?     @relation(fields: [ownerId], references: [id])
   notes NoteTag[]
 
   // タグの名前と色の一意性に関する制約
@@ -83,7 +85,7 @@ model Tag {
 
 enum TagScope {
   SYSTEM // 全ユーザー共通のタグ
-  USER   // ユーザー固有のタグ
+  USER // ユーザー固有のタグ
 }
 
 // NoteTagモデル（連携エンティティとして複合主キー化）
@@ -126,29 +128,31 @@ model User {
   id        String   @id @default(cuid())
   name      String?
   email     String?  @unique
+  settings  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  notes       Note[]
-  projects    Project[]
-  tags        Tag[] // Userが作成したTagへのリレーション
-  attachments Attachment[]
-  credentials Credential[]
-  linkCodes   LinkCode[]
+  notes        Note[]
+  projects     Project[]
+  tags         Tag[] // Userが作成したTagへのリレーション
+  attachments  Attachment[]
+  credentials  Credential[]
+  linkCodes    LinkCode[]
+  integrations Integration[]
 }
 
 // パスキー（WebAuthn Credential）を保存
 model Credential {
-  id              String    @id @default(cuid())
-  userId          String
-  credentialId    Bytes     @unique // WebAuthn credential ID
-  publicKey       Bytes              // 公開鍵
-  counter         BigInt             // 署名カウンター（リプレイ攻撃防止）
-  deviceType      String?            // "singleDevice" | "multiDevice"
-  backedUp        Boolean   @default(false)
-  transports      String[]           // ["internal", "hybrid", etc.]
-  createdAt       DateTime  @default(now())
-  lastUsedAt      DateTime?
+  id           String    @id @default(cuid())
+  userId       String
+  credentialId Bytes     @unique // WebAuthn credential ID
+  publicKey    Bytes // 公開鍵
+  counter      BigInt // 署名カウンター（リプレイ攻撃防止）
+  deviceType   String? // "singleDevice" | "multiDevice"
+  backedUp     Boolean   @default(false)
+  transports   String[] // ["internal", "hybrid", etc.]
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -160,8 +164,8 @@ model LinkCode {
   id        String    @id @default(cuid())
   userId    String
   code      String    @unique // 6桁コード
-  expiresAt DateTime            // 有効期限（5分）
-  usedAt    DateTime?           // 使用済みフラグ
+  expiresAt DateTime // 有効期限（5分）
+  usedAt    DateTime? // 使用済みフラグ
   createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -174,13 +178,15 @@ model LinkCode {
 // 1ユーザーあたり100タスク以下であればownerId不要と判断し、削除。
 // deletedAtも削除（Noteの物理削除時、またはアプリでの明示的削除）
 model Task {
-  id          String    @id @default(cuid())
-  noteId      String    @unique
-  dueAt       DateTime?
-  priority    Int?
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  noteId         String    @unique
+  dueAt          DateTime?
+  priority       Int?
+  completedAt    DateTime?
+  recurrenceRule String?
+  metadata       Json? // 外部連携IDやプラグイン固有データ用
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Note削除時にTaskも連鎖的に削除（アプリケーションの削除確認ロジックで制御）
   note Note @relation("NoteToTask", fields: [noteId], references: [id], onDelete: Cascade)
@@ -193,4 +199,40 @@ enum AttachmentKind {
   IMAGE
   FILE
   LINK
+}
+
+// Event model: Noteのサブタイプ。カレンダーイベントとしての属性を保持する。
+model Event {
+  id             String   @id @default(cuid())
+  noteId         String   @unique
+  startAt        DateTime
+  endAt          DateTime
+  isAllDay       Boolean  @default(false)
+  location       String?
+  recurrenceRule String? // iCal RRULE format
+  metadata       Json? // 外部カレンダーのEventIDや同期ステータス用
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([startAt])
+  @@index([endAt])
+}
+
+// Integration model: 外部サービス連携用のトークン等を管理
+model Integration {
+  id           String    @id @default(cuid())
+  userId       String
+  provider     String // "google_calendar", "notion", etc.
+  accessToken  String? // アプリケーション層で暗号化して保存することを推奨
+  refreshToken String? // アプリケーション層で暗号化して保存することを推奨
+  expiresAt    DateTime?
+  metadata     Json? // カレンダーIDや同期設定など
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
 }

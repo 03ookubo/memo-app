@@ -118,6 +118,16 @@ src/
 - リポジトリ: `src/server/repositories/domain.repository.ts`（Prisma 呼び出しを 1 機能 = 1 ファイルで集約する。フォルダ分割は行わない）。
 - クロスドメイン機能（Search, Migration, Orchestration）は `server/<cross-domain>/` に配置する。
 
+### ドメイン間の依存ルール（疎結合の維持）
+
+`Note` サービスが肥大化し「神クラス」になることを防ぐため、以下のルールを設けます。
+
+1.  **責務の委譲**: `Note` サービスは `Task` や `Event` の詳細なビジネスロジック（例: 繰り返しルールの計算、外部カレンダーとの同期手順）を直接実装してはいけません。
+    - 良い例: `Note` 作成時に `Task` データがあれば、`TaskService.createTask(tx, data)` を呼び出す。
+    - 悪い例: `Note` サービス内で `recurrenceRule` を解析し、次のタスク日付を計算する。
+2.  **メタデータの活用**: 外部サービス（Google Calendar等）固有のIDやステータスは、`Event` や `Task` モデルの `metadata` JSONフィールドに格納し、スキーマ定義を特定の外部サービスに依存させないようにします。
+3.  **Integrationの分離**: 外部連携処理は `services/integrations/` 配下のサービスに集約し、ドメインサービス（`Note`, `Event`）からはインターフェース（または抽象化されたメソッド）を通じて利用します。
+
 ### トランザクションと境界線
 
 - サービスがトランザクションの起点になり、必要に応じて複数のリポジトリ呼び出しを `prisma.$transaction()` でラップします。
@@ -189,6 +199,8 @@ src/
 - **添付ファイルの並び替え**: `attachments` のサービスで順序更新ロジックを実装し、API とクライアントの双方から呼び出す。
 - **パスワード保管機能**: 新たに `features/vault/` と `server/vault/` を追加し、暗号化ロジックは `lib/crypto/` に集約。既存の認証・セッションを流用し、UI はダッシュボード配下にページ追加。
 - **検索強化**: 各サービスの `search` パラメータによる LIKE 検索で対応。Tier3 で高速全文検索（tsvector）が必要になった場合は、各サービスの内部実装を差し替えるか、オーケストレーション層を追加。
+- **外部連携（Integrations）**: `server/services/integrations/` を新設し、Google Calendar や Notion との同期ロジックを実装。`Integration` モデルでトークンを管理し、`Event` モデルと外部イベントを同期させる。
+- **AI/NLP 解析**: `server/services/nlp/` を新設し、ノート本文から日付やタスクを抽出するロジックを配置。OpenAI API 等を利用する場合はここでラップし、`Note` 作成時にフックして `Event` や `Task` を自動生成する。
 
 ## テスト方針
 

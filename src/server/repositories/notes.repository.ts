@@ -13,6 +13,7 @@ import { TransactionClient, FindOptions, SortOrder } from "./types";
  */
 export interface NoteIncludeOptions {
   task?: boolean;
+  event?: boolean;
   tags?: boolean;
   attachments?: boolean;
   children?: boolean;
@@ -37,6 +38,7 @@ function buildInclude(
 
   return {
     task: options.task,
+    event: options.event,
     tags: options.tags ? { include: { tag: true } } : undefined,
     attachments: options.attachments
       ? { orderBy: { position: "asc" } }

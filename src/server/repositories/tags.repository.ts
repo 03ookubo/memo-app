@@ -75,32 +75,40 @@ export const tagsRepository = {
 
   /**
    * スコープと名前でタグを検索（一意性チェック用）
+   * SYSTEMタグの場合はownerIdをnullで、USERタグの場合はownerIdを指定して検索
    */
   async findByScopeAndName(
     scope: TagScope,
     name: string,
-    ownerId: string | null,
+    ownerId: string | null | undefined,
     tx: TransactionClient = prisma
   ): Promise<Tag | null> {
-    return tx.tag.findUnique({
+    // Prismaの複合ユニーク制約でnullを含む検索はfindFirstを使用
+    return tx.tag.findFirst({
       where: {
-        scope_name_ownerId: { scope, name, ownerId: ownerId ?? "" },
+        scope,
+        name,
+        ownerId: ownerId ?? null,
       },
     });
   },
 
   /**
    * スコープと色でタグを検索（一意性チェック用）
+   * SYSTEMタグの場合はownerIdをnullで、USERタグの場合はownerIdを指定して検索
    */
   async findByScopeAndColor(
     scope: TagScope,
     color: string,
-    ownerId: string | null,
+    ownerId: string | null | undefined,
     tx: TransactionClient = prisma
   ): Promise<Tag | null> {
-    return tx.tag.findUnique({
+    // Prismaの複合ユニーク制約でnullを含む検索はfindFirstを使用
+    return tx.tag.findFirst({
       where: {
-        scope_color_ownerId: { scope, color, ownerId: ownerId ?? "" },
+        scope,
+        color,
+        ownerId: ownerId ?? null,
       },
     });
   },

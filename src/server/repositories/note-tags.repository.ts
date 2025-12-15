@@ -56,12 +56,11 @@ export const noteTagsRepository = {
    * ノートにタグを追加
    */
   async create(
-    noteId: string,
-    tagId: string,
+    data: { noteId: string; tagId: string },
     tx: TransactionClient = prisma
   ): Promise<NoteTag> {
     return tx.noteTag.create({
-      data: { noteId, tagId },
+      data,
     });
   },
 
@@ -80,16 +79,15 @@ export const noteTagsRepository = {
   },
 
   /**
-   * ノートからタグを削除
+   * ノートから タグを削除
    */
   async delete(
-    noteId: string,
-    tagId: string,
+    data: { noteId: string; tagId: string },
     tx: TransactionClient = prisma
   ): Promise<NoteTag> {
     return tx.noteTag.delete({
       where: {
-        noteId_tagId: { noteId, tagId },
+        noteId_tagId: data,
       },
     });
   },

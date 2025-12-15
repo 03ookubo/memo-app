@@ -30,3 +30,13 @@ export {
   type TaskIncludeOptions,
   type TaskSortOptions,
 } from "./tasks.repository";
+export {
+  eventsRepository,
+  type EventIncludeOptions,
+  type EventSortOptions,
+} from "./events.repository";
+export {
+  integrationsRepository,
+  type IntegrationIncludeOptions,
+  type IntegrationSortOptions,
+} from "./integrations.repository";

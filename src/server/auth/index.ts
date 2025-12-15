@@ -23,6 +23,7 @@ export {
   generateWebAuthnAuthenticationOptions,
   verifyWebAuthnAuthentication,
   hasRegisteredUser,
+  hasRegisteredCredential,
   getFirstUser,
   getUserCredentials,
   deleteCredential,

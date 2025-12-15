@@ -107,6 +107,31 @@ export async function listArchivedProjects(
 }
 
 /**
+ * 削除済み（ゴミ箱）プロジェクト一覧を取得
+ */
+export async function listDeletedProjects(
+  input: ListProjectsInput
+): Promise<PaginatedResult<Project>> {
+  const { page, limit, skip } = normalizePagination(input.pagination);
+
+  const where = {
+    ownerId: input.ownerId,
+    deletedAt: { not: null },
+  };
+
+  const [projects, total] = await Promise.all([
+    projectsRepository.findMany(
+      where,
+      { take: limit, skip, sortBy: "updatedAt", sortOrder: "desc" },
+      input.include
+    ),
+    projectsRepository.count(where),
+  ]);
+
+  return buildPaginatedResult(projects, total, page, limit);
+}
+
+/**
  * プロジェクト詳細を取得
  */
 export async function getProjectById(

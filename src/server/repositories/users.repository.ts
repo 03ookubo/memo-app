@@ -21,6 +21,18 @@ export const usersRepository = {
   },
 
   /**
+   * emailでユーザーを取得
+   */
+  async findByEmail(
+    email: string,
+    tx: TransactionClient = prisma
+  ): Promise<User | null> {
+    return tx.user.findUnique({
+      where: { email },
+    });
+  },
+
+  /**
    * 複数ユーザーを取得
    */
   async findMany(
@@ -69,5 +81,15 @@ export const usersRepository = {
     return tx.user.delete({
       where: { id },
     });
+  },
+
+  /**
+   * ユーザー数をカウント
+   */
+  async count(
+    where: Prisma.UserWhereInput = {},
+    tx: TransactionClient = prisma
+  ): Promise<number> {
+    return tx.user.count({ where });
   },
 };

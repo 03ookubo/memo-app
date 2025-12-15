@@ -5,6 +5,7 @@
 export {
   listActiveProjects,
   listArchivedProjects,
+  listDeletedProjects,
   getProjectById,
   createProject,
   updateProject,

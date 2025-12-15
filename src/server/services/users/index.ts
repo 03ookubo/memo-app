@@ -3,6 +3,7 @@
  */
 
 export {
+  countUsers,
   listUsers,
   getUserById,
   createUser,

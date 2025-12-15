@@ -2,61 +2,110 @@
 
 この文書は、これまでの議論で合意した技術スタックと補助ツールを一覧化し、開発時に参照できるようにまとめたものです。
 
-## コアアプリケーション
+---
 
-- Next.js (App Router, TypeScript, Turbopack 開発サーバ)
-- React / React Server Components（App Router 標準構成）
-- Tailwind CSS（UI スタイリング）
-- SWR（クライアント側のフェッチとキャッシュに利用予定）
-- react-markdown（クライアント側での Markdown レンダリング。サーバー側での HTML キャッシュは行わない方針）
+## バックエンド（実装済み ✅）
 
-## データ層
+### コアフレームワーク
+- **Next.js 15** (App Router, TypeScript, Turbopack)
+- **React 19** / React Server Components
+- **Vitest** - テストフレームワーク（345件のテスト実装済み）
 
-- Prisma ORM
-- Postgres（Supabase マネージド Postgres を想定）
-- Prisma Client（`node_modules/@prisma/client` に生成、デフォルト設定）
-- Prisma Studio（データ確認ツール／必要に応じて利用）
+### データ層
+- **Prisma ORM** - データベースアクセス
+- **PostgreSQL** (Supabase マネージド)
+- Repository / Service パターンによる層分離
 
-## 認証・セキュリティ
+### 認証・セキュリティ
+- **NextAuth.js v5** (Auth.js) + WebAuthn（パスキー認証）
+- **@simplewebauthn/server, @simplewebauthn/browser**
+- JWT セッション（30日有効）
+- リンクコード（6桁、デバイス追加用）
 
-- NextAuth.js v5 (Auth.js) + WebAuthn（パスキー認証）
-  - 認証方式: パスキー（指紋/顔認証、パスワード不要）
-  - セッション戦略: JWT（30 日有効、DB セッションテーブル不要）
-  - デバイス追加: リンクコード（6 桁、有効期限 5 分）
-- @simplewebauthn/server, @simplewebauthn/browser（WebAuthn 実装）
-- 環境変数管理: `.env`（ローカル開発用）＋ Vercel / Supabase 環境変数
-  - `DATABASE_URL` … Prisma 接続用
-  - `DIRECT_URL` … Prisma マイグレーション用（Connection Pooling 経由でない直接接続）
-  - `NEXT_PUBLIC_SUPABASE_URL` … Supabase プロジェクト URL
-  - `SUPABASE_SERVICE_ROLE_KEY` … Storage API 用サービスロールキー
-  - `NEXTAUTH_SECRET` … JWT トークン署名用シークレット
-  - `NEXTAUTH_URL` … 認証コールバック URL（本番環境用）
-  - `WEBAUTHN_RP_ID` … WebAuthn Relying Party ID（ドメイン）
-  - `WEBAUTHN_RP_NAME` … WebAuthn Relying Party 名
-  - `WEBAUTHN_ORIGIN` … WebAuthn オリジン URL
+### ストレージ
+- **Supabase Storage** - 添付ファイル保存
+- **@supabase/supabase-js** - Storage API クライアント
 
-## ストレージ・添付ファイル
+---
 
-- Supabase Storage（添付ファイルの保存先）
-- `@supabase/supabase-js`（Storage API クライアント）
-- メタデータ管理は Prisma の `Attachment` モデルで実施
-- レイアウト情報（位置・サイズ・配置）は `Attachment.metadata` に JSON で格納
+## フロントエンド（これから実装）
 
-## 開発体験・ツールチェーン
+### UIコンポーネント
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| **shadcn/ui** | latest | UIコンポーネント基盤 |
+| **Tailwind CSS** | 3.x | スタイリング（導入済み） |
+| **Lucide React** | latest | アイコン |
+| **Radix UI** | - | shadcn/ui の基盤（自動導入） |
 
-- Node.js / npm（create-next-app で初期化済み）
-- ESLint / Prettier（Next.js デフォルト設定を利用）
-- dotenv（ローカル開発時に環境変数を読み込む）
-- GitHub（ソースコードホスティング、PR レビュー）
+### 状態管理・データ取得
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| **@tanstack/react-query** | ^5.x | サーバー状態管理、API連携 |
+| **zustand** | ^5.x | クライアント状態（レイアウト等） |
+| **React Hook Form** | ^7.x | フォーム管理 |
+| **Zod** | ^3.x | バリデーション（バックエンドと共有） |
+
+### インタラクション・アニメーション
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| **@dnd-kit/core** | ^6.x | ドラッグ&ドロップ |
+| **@dnd-kit/sortable** | ^8.x | ソート可能リスト |
+| **framer-motion** | ^11.x | アニメーション |
+| **@use-gesture/react** | ^10.x | タッチジェスチャー |
+
+### レイアウト・エディタ
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| **react-grid-layout** | ^1.x | パズル型グリッドレイアウト |
+| **@tiptap/react** | ^2.x | リッチテキストエディタ |
+| **@tiptap/starter-kit** | ^2.x | 基本拡張セット |
+| **@tiptap/extension-placeholder** | ^2.x | プレースホルダー |
+
+### ユーティリティ
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| **date-fns** | ^3.x | 日付操作 |
+| **clsx** | ^2.x | クラス名結合 |
+| **tailwind-merge** | ^2.x | Tailwind クラスマージ |
+
+---
+
+## 環境変数
+
+```bash
+# Database (Supabase)
+DATABASE_URL="postgresql://..."
+DIRECT_URL="postgresql://..."
+
+# Supabase Storage
+NEXT_PUBLIC_SUPABASE_URL="https://xxx.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="xxx"
+
+# NextAuth
+NEXTAUTH_SECRET="xxx"
+NEXTAUTH_URL="http://localhost:3000"
+
+# WebAuthn
+WEBAUTHN_RP_ID="localhost"
+WEBAUTHN_RP_NAME="Memo App"
+WEBAUTHN_ORIGIN="http://localhost:3000"
+```
+
+---
 
 ## デプロイ・ホスティング
 
-- Vercel（Next.js ホスティング、環境変数設定）
-- Supabase（データベース・ストレージ）
+- **Vercel** - Next.js ホスティング
+- **Supabase** - データベース・ストレージ
+- **GitHub** - ソースコード管理
 
-## 補足メモ
+---
 
-- パスワード管理機能は将来要件（セキュリティ基準を満たしたタイミングで検討）。
-- タグ自動提案や自動タグ付けは Tier2 以降の予定機能。
-- クリップボード取り込み、添付ドラッグ配置などの UI 改善機能は段階的に導入予定。
-- AI（本アシスタント）はドキュメント/設計支援に限定し、物理的な操作は人間が行う（詳細は `.github/copilot-instruction.md` を参照）。
+## 開発ツール
+
+- **ESLint** - コード品質
+- **Prettier** - コードフォーマット
+- **TypeScript** - 型安全性
+- **Vitest** - テスト
+- **Prisma Studio** - DB管理GUI

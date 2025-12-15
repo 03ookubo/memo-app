@@ -1,0 +1,14 @@
+{
+  // Prismaファイルの特定のエラーメッセージを非表示にする
+  "problems.filter": {
+    "exclude": [
+      "**/prisma/schema.prisma"
+    ]
+  },
+  
+  // Prismaファイル内での診断表示も無効化
+  "[prisma]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "Prisma.prisma"
+  }
+}

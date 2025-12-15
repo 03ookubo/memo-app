@@ -314,6 +314,15 @@ export async function hasRegisteredUser(): Promise<boolean> {
 }
 
 /**
+ * パスキー（Credential）が登録済みかチェック
+ * ユーザーが存在してもパスキーがなければ false
+ */
+export async function hasRegisteredCredential(): Promise<boolean> {
+  const count = await prisma.credential.count();
+  return count > 0;
+}
+
+/**
  * 最初のユーザーを取得（シングルユーザーモード用）
  */
 export async function getFirstUser(): Promise<User | null> {

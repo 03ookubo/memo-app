@@ -25,6 +25,14 @@ export interface ListUsersInput {
 }
 
 /**
+ * ユーザー数をカウント
+ * 初回登録判定などに使用
+ */
+export async function countUsers(): Promise<number> {
+  return usersRepository.count({});
+}
+
+/**
  * ユーザー一覧を取得
  */
 export async function listUsers(
@@ -32,11 +40,10 @@ export async function listUsers(
 ): Promise<PaginatedResult<User>> {
   const { page, limit, skip } = normalizePagination(input.pagination);
 
-  const users = await usersRepository.findMany({}, { take: limit, skip });
-
-  // countメソッドがないため、全件取得して数える（改善の余地あり）
-  const allUsers = await usersRepository.findMany({});
-  const total = allUsers.length;
+  const [users, total] = await Promise.all([
+    usersRepository.findMany({}, { take: limit, skip }),
+    usersRepository.count({}),
+  ]);
 
   return buildPaginatedResult(users, total, page, limit);
 }

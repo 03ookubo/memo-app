@@ -11,6 +11,8 @@ API Route や Server Component からこれらの関数を呼び出してビジ�
 - [Task Service](#task-service)
 - [Attachment Service](#attachment-service)
 - [User Service](#user-service)
+- [Event Service](#event-service)
+- [Integration Service](#integration-service)
 - [Storage Service](#storage-service)
 - [共通型](#共通型)
 
@@ -404,6 +406,58 @@ export async function POST(request: Request) {
     throw error;
   }
 }
+```
+
+---
+
+## Event Service
+
+**パス**: `src/server/services/events/event.service.ts`
+
+カレンダーイベントの管理を行います。Event は Note と 1:1 の関係です。
+
+| 関数            | 説明                       | 引数                                    | 戻り値    |
+| --------------- | -------------------------- | --------------------------------------- | --------- |
+| `listEvents`    | 期間内のイベント一覧を取得 | `ListEventsInput`                       | `Event[]` |
+| `getEventById`  | イベント詳細を取得         | `id: string, ownerId: string`           | `Event`   |
+| `updateEvent`   | イベントを更新             | `id: string, ownerId: string, input`    | `Event`   |
+| `deleteEvent`   | イベントを削除             | `id: string, ownerId: string`           | `void`    |
+
+```typescript
+// 使用例
+const events = await listEvents({
+  ownerId: "user-123",
+  from: new Date("2025-01-01"),
+  to: new Date("2025-01-31"),
+  include: { note: true },
+});
+```
+
+---
+
+## Integration Service
+
+**パス**: `src/server/services/integrations/integration.service.ts`
+
+外部サービス連携（Google Calendar, Notion など）のトークン管理を行います。
+
+| 関数                  | 説明                           | 引数                              | 戻り値              |
+| --------------------- | ------------------------------ | --------------------------------- | ------------------- |
+| `listIntegrations`    | ユーザーの全連携一覧を取得     | `userId: string`                  | `Integration[]`     |
+| `getIntegration`      | 特定プロバイダーの連携情報取得 | `userId: string, provider: string`| `Integration \| null` |
+| `upsertIntegration`   | 連携を登録または更新           | `UpsertIntegrationInput`          | `Integration`       |
+| `removeIntegration`   | 連携を解除                     | `userId: string, provider: string`| `void`              |
+
+```typescript
+// 使用例
+await upsertIntegration({
+  userId: "user-123",
+  provider: "google_calendar",
+  accessToken: "encrypted-token",
+  refreshToken: "encrypted-refresh-token",
+  expiresAt: new Date("2025-12-31"),
+  metadata: { calendarId: "primary" },
+});
 ```
 
 ---

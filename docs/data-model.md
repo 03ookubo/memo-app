@@ -43,9 +43,11 @@ Note ── self reference ──< Note
   - `title` … タイトル（任意。メモ中心運用では未入力も可）
   - `bodyMarkdown` … ノート本文（Markdown 形式）。クライアント側でライブラリ（react-markdown 等）を使用してレンダリング
   - `bodyHtml` … （将来拡張用）HTML キャッシュ。**現在は使用しない（NULL 運用）**。クライアント側で Markdown をリアルタイム変換するため不要。将来的に SSR/SEO 対応やリッチエディタ機能が必要になった場合に活用
-  - `Task` モデル … Todo として扱う場合は `Note.task` に 1:1 で Task が紐づき、`dueAt` / `priority` / `completedAt` などタスク固有属性を保持します。
+  - `Task` モデル … Todo として扱う場合は `Note.task` に 1:1 で Task が紐づき、`dueAt` / `priority` / `completedAt` / `recurrenceRule` などタスク固有属性を保持します。
+  - `Event` モデル … カレンダーイベントとして扱う場合は `Note.event` に 1:1 で Event が紐づき、`startAt` / `endAt` / `location` / `recurrenceRule` などを保持します。
   - `archivedAt` / `deletedAt` … アーカイブ・ソフト削除管理
   - `metadata` … 将来拡張用の柔軟な JSON
+  - `isEncrypted` … クライアントサイド暗号化されたノートかどうかのフラグ
   - `sortIndex` … 一覧やノート内での並び順を維持する整数
   - `createdAt` / `updatedAt`
 - **補足**: `ownerId`, `archivedAt`, `projectId` にインデックスを設定し、絞り込み性能を確保しています。タスク固有の `dueAt` に対する検索は `Task` 側のインデックスを使用します。タグ（`NoteTag`）や添付（`Attachment`）とも関連します。
@@ -53,12 +55,12 @@ Note ── self reference ──< Note
 ### データライフサイクルと削除ポリシー（重要）
 
 - `Note` は `deletedAt`（ソフト削除）を持ち、ゴミ箱（復元可能）として扱います。UI 上で「復元」や「完全削除」をサポートする場合は、この `deletedAt` を参照して運用します。
-- `Task`、`Attachment`、`Tag` は `deletedAt` を持たず、**Note に紐づく子リソースは Note の物理削除時にアプリケーションロジックで削除**します。つまり、Note をソフト削除しても Task は自動的には消えません（ユーザーの選択に応じて削除する）。
+- `Task`、`Event`、`Attachment`、`Tag` は `deletedAt` を持たず、**Note に紐づく子リソースは Note の物理削除時にアプリケーションロジックで削除**します。つまり、Note をソフト削除しても Task/Event は自動的には消えません（ユーザーの選択に応じて削除する）。
 - 親ノート（`parentId`）削除時は `onDelete: SetNull` を採用します。これにより、子ノートは独立化されます。ユーザーに「関連リソースも全て削除するか、子ノートを残すか」を確認して処理を行います。
 
-### Note ↔ Task の扱い
+### Note ↔ Task / Event の扱い
 
-- Note の物理削除、またはアプリケーションの明示的な操作（ユーザーが関連リソースの削除を選択）で `Task` を削除します。`Task.deletedAt` は持ちません。
+- Note の物理削除、またはアプリケーションの明示的な操作（ユーザーが関連リソースの削除を選択）で `Task` / `Event` を削除します。`Task.deletedAt` / `Event.deletedAt` は持ちません。
 - 実装に際しては、物理削除時に `Attachment` / `NoteTag` も自動的に削除されるよう `onDelete: Cascade` を付与することを推奨します（ただし、ソフト削除はアプリ側で制御します）。
 
 ### `Project` テーブル
@@ -114,6 +116,30 @@ Note ── self reference ──< Note
   - `metadata` … レイアウト情報や EXIF などを保存する JSON（任意）
   - `createdAt` / `updatedAt`
 - **補足**: `@@unique([noteId, position])` で並び替えを担保し、`@@index([ownerId])` で所有者単位のクエリ性能を確保します。
+
+### `Event` テーブル
+
+- **主キー**: `id`
+- **主な列**
+  - `noteId` … 紐づくノート（`Note.id`）
+  - `startAt` / `endAt` … 開始・終了日時
+  - `isAllDay` … 終日イベントフラグ
+  - `location` … 場所
+  - `recurrenceRule` … 繰り返しルール（iCal RRULE 形式）
+  - `createdAt` / `updatedAt`
+- **補足**: `Note` と 1:1 で紐づき、カレンダー表示やスケジュール管理に使用します。
+
+### `Integration` テーブル
+
+- **主キー**: `id`
+- **主な列**
+  - `userId` … 所有者
+  - `provider` … 連携プロバイダ（"google_calendar", "notion" 等）
+  - `accessToken` / `refreshToken` … 連携用トークン（アプリ層で暗号化推奨）
+  - `expiresAt` … トークン有効期限
+  - `metadata` … その他設定情報
+  - `createdAt` / `updatedAt`
+- **補足**: 外部カレンダー同期や他サービス連携のための認証情報を管理します。
 
 ### Attachment.metadata のレイアウト仕様
 

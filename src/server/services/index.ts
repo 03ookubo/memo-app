@@ -22,6 +22,12 @@ export * from "./attachments";
 // User Services
 export * from "./users";
 
+// Event Services
+export * from "./events";
+
+// Integration Services
+export * from "./integrations";
+
 // Common Types
 export {
   ServiceError,

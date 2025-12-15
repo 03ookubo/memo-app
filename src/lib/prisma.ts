@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 declare global {
-  // eslint-disable-next-line no-var
+  // Use var for global augmentation (required by TypeScript)
   var prisma: PrismaClient | undefined;
 }
 

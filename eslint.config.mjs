@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Test files configuration
+  {
+    files: ["tests/**/*.ts", "tests/**/*.tsx"],
+    rules: {
+      // Allow explicit any in test files for mocking purposes
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

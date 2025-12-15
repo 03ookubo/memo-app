@@ -273,7 +273,7 @@ export async function addTagToNote(
     );
   }
 
-  await noteTagsRepository.create(noteId, tagId);
+  await noteTagsRepository.create({ noteId, tagId });
 }
 
 /**
@@ -293,7 +293,7 @@ export async function removeTagFromNote(
     );
   }
 
-  await noteTagsRepository.delete(noteId, tagId);
+  await noteTagsRepository.delete({ noteId, tagId });
 }
 
 /**
